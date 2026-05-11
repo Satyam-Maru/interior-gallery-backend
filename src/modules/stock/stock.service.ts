@@ -63,15 +63,23 @@ export class StockService {
     return stockEntry;
   }
 
-  async getStockHistory() {
-    const { data, error } = await this.fastify.supabase
+  async getStockHistory(filters?: { startDate?: string; endDate?: string }) {
+    let query = this.fastify.supabase
       .from('stock')
       .select(`
         *,
         products (name),
         entities (name)
-      `)
-      .order('created_at', { ascending: false });
+      `);
+
+    if (filters?.startDate) {
+      query = query.gte('created_at', filters.startDate);
+    }
+    if (filters?.endDate) {
+      query = query.lte('created_at', filters.endDate);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
     
     if (error) throw error;
     return data;
