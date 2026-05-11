@@ -11,11 +11,7 @@ import locationRoutes from './modules/locations/locations.routes';
 dotenv.config();
 
 const app = fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-    },
-  },
+  logger: true,
 });
 
 // Register Plugins
