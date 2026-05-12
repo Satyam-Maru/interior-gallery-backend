@@ -24,4 +24,16 @@ export class ProductService {
     if (error) throw error;
     return data;
   }
+
+  async updateProduct(id: number, data: Partial<CreateProductInput>) {
+    const { data: product, error } = await this.fastify.supabase
+      .from('products')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return product;
+  }
 }

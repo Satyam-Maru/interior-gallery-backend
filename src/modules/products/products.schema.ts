@@ -10,6 +10,9 @@ export const createProductSchema = z.object({
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 
+export const updateProductSchema = createProductSchema.partial();
+export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+
 export const productResponseSchema = z.object({
   id: z.number(),
   name: z.string(),
