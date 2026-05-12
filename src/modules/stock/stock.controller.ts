@@ -17,13 +17,13 @@ export const createStockHandler = async (
 };
 
 export const getStockHistoryHandler = async (
-  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
+  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string; productId?: string; entityId?: string } }>,
   reply: FastifyReply
 ) => {
   const service = new StockService(request.server);
-  const { startDate, endDate } = request.query;
+  const { startDate, endDate, productId, entityId } = request.query;
   try {
-    const history = await service.getStockHistory({ startDate, endDate });
+    const history = await service.getStockHistory({ startDate, endDate, productId, entityId });
     return reply.send(history);
   } catch (error: any) {
     request.log.error(error);

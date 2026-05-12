@@ -63,7 +63,7 @@ export class StockService {
     return stockEntry;
   }
 
-  async getStockHistory(filters?: { startDate?: string; endDate?: string }) {
+  async getStockHistory(filters?: { startDate?: string; endDate?: string; productId?: string; entityId?: string }) {
     let query = this.fastify.supabase
       .from('stock')
       .select(`
@@ -77,6 +77,12 @@ export class StockService {
     }
     if (filters?.endDate) {
       query = query.lte('created_at', filters.endDate);
+    }
+    if (filters?.productId) {
+      query = query.eq('product_id', filters.productId);
+    }
+    if (filters?.entityId) {
+      query = query.eq('entity_id', filters.entityId);
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
