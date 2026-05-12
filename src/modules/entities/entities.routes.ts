@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { createEntitySchema } from './entities.schema';
-import { createEntityHandler, getEntitiesHandler } from './entities.controller';
+import { createEntitySchema, updateEntitySchema } from './entities.schema';
+import { createEntityHandler, getEntitiesHandler, updateEntityHandler } from './entities.controller';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 
 export default async function entityRoutes(fastify: FastifyInstance) {
@@ -11,4 +11,8 @@ export default async function entityRoutes(fastify: FastifyInstance) {
   }, createEntityHandler);
 
   server.get('/', getEntitiesHandler);
+
+  server.put('/:id', {
+    schema: { body: updateEntitySchema },
+  }, updateEntityHandler);
 }

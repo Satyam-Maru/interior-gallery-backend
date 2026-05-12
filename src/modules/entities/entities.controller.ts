@@ -23,3 +23,16 @@ export const getEntitiesHandler = async (
   const entities = await service.getAllEntities();
   return reply.send(entities);
 };
+
+export const updateEntityHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: any }>,
+  reply: FastifyReply
+) => {
+  const service = new EntityService(request.server);
+  try {
+    const entity = await service.updateEntity(parseInt(request.params.id), request.body);
+    return reply.send(entity);
+  } catch (error: any) {
+    return reply.code(400).send({ error: error.message });
+  }
+};

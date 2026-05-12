@@ -24,4 +24,16 @@ export class EntityService {
     if (error) throw error;
     return data;
   }
+
+  async updateEntity(id: number, data: any) {
+    const { data: entity, error } = await this.fastify.supabase
+      .from('entities')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return entity;
+  }
 }
