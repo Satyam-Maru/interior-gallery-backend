@@ -24,4 +24,16 @@ export class LocationService {
     if (error) throw error;
     return data;
   }
+
+  async updateLocation(id: number, data: { name: string }) {
+    const { data: location, error } = await this.fastify.supabase
+      .from('locations')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return location;
+  }
 }
