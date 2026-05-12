@@ -24,4 +24,16 @@ export class CategoryService {
     if (error) throw error;
     return data;
   }
+
+  async updateCategory(id: number, data: { name: string }) {
+    const { data: category, error } = await this.fastify.supabase
+      .from('category')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return category;
+  }
 }
