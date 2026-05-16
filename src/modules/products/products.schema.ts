@@ -6,6 +6,7 @@ export const createProductSchema = z.object({
   price: z.number().positive(),
   quantity: z.number().min(0).default(0),
   category_id: z.number().int(),
+  code: z.string().optional(),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
@@ -20,4 +21,5 @@ export const productResponseSchema = z.object({
   price: z.number(),
   quantity: z.number(),
   category_id: z.number(),
+  code: z.string().nullable(),
 });
