@@ -12,63 +12,91 @@ export class DashboardService {
       .select('quantity');
 
     if (prodError) throw prodError;
-    const totalStock = products.reduce((acc, p) => acc + (parseFloat(p.quantity) || 0), 0);
+    const totalStock = products.reduce(
+      (acc: number, p: any) => acc + (parseFloat(p.quantity) || 0),
+      0
+    );
 
-    // 2. Stock transactions
-    const { data: stock, error: stockError } = await supabase
-      .from('stock')
-      .select('type, quantity, price, discount');
+    // 2. Bills summary — purchases, sales, returns
+    const { data: bills, error: billsError } = await supabase
+      .from('bills')
+      .select('id, type, net_amount, bill_date');
 
-    if (stockError) throw stockError;
+    if (billsError) throw billsError;
 
     let totalPurchases = 0;
     let totalSales = 0;
-    const historyCount = stock.length;
+    let totalPurchaseReturns = 0;
+    let totalSellReturns = 0;
 
-    stock.forEach(item => {
-      const qty = parseFloat(item.quantity);
-      const price = parseFloat(item.price);
-      const discount = parseFloat(item.discount || 0);
-      const total = (qty * price) * (1 - (discount / 100));
-
-      if (item.type === 'purchase') {
-        totalPurchases += total;
-      } else if (item.type === 'sell') {
-        totalSales += total;
-      }
+    (bills ?? []).forEach((bill: any) => {
+      const amount = parseFloat(bill.net_amount) || 0;
+      if (bill.type === 'purchase') totalPurchases += amount;
+      else if (bill.type === 'sell') totalSales += amount;
+      else if (bill.type === 'purchase_return') totalPurchaseReturns += amount;
+      else if (bill.type === 'sell_return') totalSellReturns += amount;
     });
 
-    // 3. Sales & Purchase Trend (Last 7 Days)
-    const last7Days = [...Array(7)].map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      return d.toISOString().split('T')[0];
-    }).reverse();
+    const billIds = (bills ?? []).map((b: any) => b.id);
+
+    // 3. Total paid across all bills
+    let totalPaid = 0;
+    if (billIds.length > 0) {
+      const { data: payments, error: payError } = await supabase
+        .from('payments')
+        .select('amount')
+        .in('bill_id', billIds);
+
+      if (payError) throw payError;
+      totalPaid = (payments ?? []).reduce(
+        (acc: number, p: any) => acc + (parseFloat(p.amount) || 0),
+        0
+      );
+    }
+
+    // Total outstanding across all parties: total billed minus total payments
+    const totalBilled = totalPurchases + totalSellReturns + totalSales + totalPurchaseReturns;
+    const totalOutstanding = totalBilled - totalPaid;
+
+    // 4. Sales & Purchase Trend (Last 7 Days)
+    const last7Days = [...Array(7)]
+      .map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return d.toISOString().split('T')[0];
+      })
+      .reverse();
 
     const { data: trendData, error: trendError } = await supabase
-      .from('stock')
-      .select('type, quantity, price, discount, created_at')
-      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+      .from('bills')
+      .select('type, net_amount, bill_date')
+      .gte(
+        'bill_date',
+        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      );
 
     if (trendError) throw trendError;
 
-    const dailyTrend = last7Days.map(date => {
+    const dailyTrend = last7Days.map((date) => {
       let sales = 0;
       let purchases = 0;
-      
-      trendData.forEach(item => {
-        const itemDate = item.created_at.split('T')[0];
-        if (itemDate === date) {
-          const total = (parseFloat(item.quantity) * parseFloat(item.price)) * (1 - (parseFloat(item.discount || 0) / 100));
-          if (item.type === 'sell') sales += total;
-          else purchases += total;
+
+      (trendData ?? []).forEach((bill: any) => {
+        const billDate = bill.bill_date.split('T')[0];
+        if (billDate === date) {
+          const amount = parseFloat(bill.net_amount) || 0;
+          if (bill.type === 'sell' || bill.type === 'sell_return') {
+            sales += amount;
+          } else {
+            purchases += amount;
+          }
         }
       });
 
       return { date, sales, purchases };
     });
 
-    // 4. Category Distribution
+    // 5. Category Distribution (by product quantity)
     const { data: catData, error: catError } = await supabase
       .from('products')
       .select('quantity, category(name)');
@@ -76,20 +104,27 @@ export class DashboardService {
     if (catError) throw catError;
 
     const categoryDistribution: Record<string, number> = {};
-    catData.forEach(item => {
-      // Supabase might return category as an object or an array depending on schema relations
-      const category: any = Array.isArray(item.category) ? item.category[0] : item.category;
+    (catData ?? []).forEach((item: any) => {
+      const category: any = Array.isArray(item.category)
+        ? item.category[0]
+        : item.category;
       const catName = category?.name || 'Uncategorized';
-      categoryDistribution[catName] = (categoryDistribution[catName] || 0) + parseFloat(item.quantity);
+      categoryDistribution[catName] =
+        (categoryDistribution[catName] || 0) + parseFloat(item.quantity);
     });
 
     return {
       totalStock,
       totalPurchases,
       totalSales,
-      historyCount,
+      totalPurchaseReturns,
+      totalSellReturns,
+      totalOutstanding,
+      billCount: (bills ?? []).length,
       dailyTrend,
-      categoryDistribution: Object.entries(categoryDistribution).map(([name, value]) => ({ name, value }))
+      categoryDistribution: Object.entries(categoryDistribution).map(
+        ([name, value]) => ({ name, value })
+      ),
     };
   }
 }

@@ -1,12 +1,9 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "baseUrl": ".",
-    "paths": {
-      "*": ["node_modules/*", "src/*"]
-    },
+    "module": "node16",
+    "moduleResolution": "node16",
+    "ignoreDeprecations": "6.0",
     "outDir": "./dist",
     "sourceMap": true,
     "strict": true,

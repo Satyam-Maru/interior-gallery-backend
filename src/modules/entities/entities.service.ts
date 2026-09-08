@@ -1,39 +1,22 @@
 import { FastifyInstance } from 'fastify';
-import { CreateEntityInput } from './entities.schema';
+import { PartyService } from '../parties/parties.service';
 
-export class EntityService {
-  constructor(private fastify: FastifyInstance) {}
+export * from '../parties/parties.service';
 
-  async createEntity(data: CreateEntityInput) {
-    const { data: entity, error } = await this.fastify.supabase
-      .from('entities')
-      .insert(data)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return entity;
+export class EntityService extends PartyService {
+  constructor(fastify: FastifyInstance) {
+    super(fastify);
   }
 
   async getAllEntities() {
-    const { data, error } = await this.fastify.supabase
-      .from('entities')
-      .select('*, locations(name)')
-      .order('name');
+    return this.getAllParties();
+  }
 
-    if (error) throw error;
-    return data;
+  async createEntity(data: any) {
+    return this.createParty(data);
   }
 
   async updateEntity(id: number, data: any) {
-    const { data: entity, error } = await this.fastify.supabase
-      .from('entities')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return entity;
+    return this.updateParty(id, data);
   }
 }

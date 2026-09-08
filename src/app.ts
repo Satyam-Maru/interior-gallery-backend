@@ -2,11 +2,10 @@ import fastify from 'fastify';
 import dotenv from 'dotenv';
 import supabasePlugin from './plugins/supabase';
 import zodPlugin from './plugins/zod';
-import stockRoutes from './modules/stock/stock.routes';
+import billRoutes from './modules/stock/stock.routes';
 import productRoutes from './modules/products/products.routes';
 import categoryRoutes from './modules/category/category.routes';
-import entityRoutes from './modules/entities/entities.routes';
-import locationRoutes from './modules/locations/locations.routes';
+import partyRoutes from './modules/parties/parties.routes';
 import dashboardRoutes from './modules/dashboard/dashboard.routes';
 
 dotenv.config();
@@ -20,11 +19,11 @@ app.register(zodPlugin);
 app.register(supabasePlugin);
 
 // Register Routes
-app.register(stockRoutes, { prefix: '/api/v1/stock' });
+app.register(billRoutes, { prefix: '/api/v1/bills' });
 app.register(productRoutes, { prefix: '/api/v1/products' });
 app.register(categoryRoutes, { prefix: '/api/v1/categories' });
-app.register(entityRoutes, { prefix: '/api/v1/entities' });
-app.register(locationRoutes, { prefix: '/api/v1/locations' });
+app.register(partyRoutes, { prefix: '/api/v1/parties' });
+app.register(partyRoutes, { prefix: '/api/v1/entities' }); // Fallback alias
 app.register(dashboardRoutes, { prefix: '/api/v1/dashboard' });
 
 export default app;
