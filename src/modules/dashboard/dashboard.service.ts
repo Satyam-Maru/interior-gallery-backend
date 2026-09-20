@@ -54,9 +54,11 @@ export class DashboardService {
       );
     }
 
-    // Total outstanding across all parties: total billed minus total payments
-    const totalBilled = totalPurchases + totalSellReturns + totalSales + totalPurchaseReturns;
-    const totalOutstanding = totalBilled - totalPaid;
+    // Net billed = (purchases - purchase_returns) + (sales - sell_returns)
+    const netPurchases = Math.max(0, totalPurchases - totalPurchaseReturns);
+    const netSales = Math.max(0, totalSales - totalSellReturns);
+    const totalBilled = netPurchases + netSales;
+    const totalOutstanding = Math.max(0, totalBilled - totalPaid);
 
     // 4. Sales & Purchase Trend (Last 7 Days)
     const last7Days = [...Array(7)]
@@ -85,15 +87,23 @@ export class DashboardService {
         const billDate = bill.bill_date.split('T')[0];
         if (billDate === date) {
           const amount = parseFloat(bill.net_amount) || 0;
-          if (bill.type === 'sell' || bill.type === 'sell_return') {
+          if (bill.type === 'sell') {
             sales += amount;
-          } else {
+          } else if (bill.type === 'sell_return') {
+            sales -= amount;
+          } else if (bill.type === 'purchase') {
             purchases += amount;
+          } else if (bill.type === 'purchase_return') {
+            purchases -= amount;
           }
         }
       });
 
-      return { date, sales, purchases };
+      return {
+        date,
+        sales: Math.max(0, sales),
+        purchases: Math.max(0, purchases),
+      };
     });
 
     // 5. Category Distribution (by product quantity)
@@ -105,7 +115,7 @@ export class DashboardService {
 
     const categoryDistribution: Record<string, number> = {};
     (catData ?? []).forEach((item: any) => {
-      const category: any = Array.isArray(item.category)
+      const category = Array.isArray(item.category)
         ? item.category[0]
         : item.category;
       const catName = category?.name || 'Uncategorized';
@@ -115,8 +125,8 @@ export class DashboardService {
 
     return {
       totalStock,
-      totalPurchases,
-      totalSales,
+      totalPurchases: netPurchases,
+      totalSales: netSales,
       totalPurchaseReturns,
       totalSellReturns,
       totalOutstanding,

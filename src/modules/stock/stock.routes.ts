@@ -2,11 +2,13 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   createBillSchema,
+  updateBillSchema,
   createPaymentSchema,
   getBillsQuerySchema,
 } from './stock.schema';
 import {
   createBillHandler,
+  updateBillHandler,
   getBillsHandler,
   getBillByIdHandler,
   createPaymentHandler,
@@ -28,6 +30,11 @@ export default async function billRoutes(fastify: FastifyInstance) {
 
   // GET /api/v1/bills/:id — get a single bill with items, payments & outstanding
   server.get('/:id', getBillByIdHandler);
+
+  // PUT /api/v1/bills/:id — update an existing bill
+  server.put('/:id', {
+    schema: { body: updateBillSchema },
+  }, updateBillHandler);
 
   // POST /api/v1/bills/payments — record a payment against a bill
   server.post('/payments', {

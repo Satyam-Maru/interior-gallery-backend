@@ -46,6 +46,20 @@ export const createBillSchema = z.object({
 export type CreateBillInput = z.infer<typeof createBillSchema>;
 
 // ---------------------------------------------------------------------------
+// Update Bill
+// ---------------------------------------------------------------------------
+export const updateBillSchema = z.object({
+  party_id: z.number().int().positive().optional(),
+  entity_id: z.number().int().positive().optional(),
+  bill_date: z.string().optional(),
+  note: z.string().nullable().optional(),
+  items: z.array(billItemSchema).min(1, 'At least one item is required').optional(),
+  discounts: z.array(z.number().min(0).max(100)).optional(),
+});
+
+export type UpdateBillInput = z.infer<typeof updateBillSchema>;
+
+// ---------------------------------------------------------------------------
 // Create Payment (record a payment against an existing bill)
 // ---------------------------------------------------------------------------
 export const createPaymentSchema = z.object({

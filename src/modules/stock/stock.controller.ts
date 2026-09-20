@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { BillService } from './stock.service';
 import {
   CreateBillInput,
+  UpdateBillInput,
   CreatePaymentInput,
   GetBillsQuery,
 } from './stock.schema';
@@ -54,6 +55,23 @@ export const getBillByIdHandler = async (
   } catch (error: any) {
     request.log.error(error);
     return reply.code(404).send({ error: error.message });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Update an existing bill
+// ---------------------------------------------------------------------------
+export const updateBillHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: UpdateBillInput }>,
+  reply: FastifyReply
+) => {
+  const service = new BillService(request.server);
+  try {
+    const bill = await service.updateBill(Number(request.params.id), request.body);
+    return reply.send(bill);
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.code(400).send({ error: error.message });
   }
 };
 

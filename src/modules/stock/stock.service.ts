@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { CreateBillInput, CreatePaymentInput, GetBillsQuery } from './stock.schema';
+import { CreateBillInput, UpdateBillInput, CreatePaymentInput, GetBillsQuery } from './stock.schema';
 
 export class BillService {
   constructor(private fastify: FastifyInstance) {}
@@ -227,6 +227,256 @@ export class BillService {
 
     if (fullBillError) throw fullBillError;
     return fullBill;
+  }
+
+  // -------------------------------------------------------------------------
+  // Update Bill (party, date, note, discounts, items)
+  // -------------------------------------------------------------------------
+  async updateBill(id: number, data: UpdateBillInput) {
+    const { supabase } = this.fastify;
+
+    // 1. Fetch current bill with existing items
+    const { data: currentBill, error: billError } = await supabase
+      .from('bills')
+      .select('*, bill_items(*)')
+      .eq('id', id)
+      .single();
+
+    if (billError || !currentBill) {
+      throw new Error(`Bill #${id} not found.`);
+    }
+
+    const billType = currentBill.type;
+    const isStockIn = billType === 'purchase' || billType === 'sell_return';
+
+    const partyId = data.party_id ?? data.entity_id ?? currentBill.party_id;
+    const billDate = data.bill_date ?? currentBill.bill_date;
+    const note = data.note !== undefined ? data.note : currentBill.note;
+    const discounts = data.discounts ?? currentBill.discounts ?? [];
+    const newItems = data.items;
+
+    // If items are being updated, handle return validations and stock reconciliation
+    if (newItems && newItems.length > 0) {
+      // Check if any return bills reference this bill
+      const { data: prevReturns, error: retErr } = await supabase
+        .from('bills')
+        .select('id, bill_items(product_id, quantity)')
+        .eq('original_bill_id', id);
+
+      if (retErr) throw retErr;
+
+      if (prevReturns && prevReturns.length > 0) {
+        const returnedQtyMap = new Map<number, number>();
+        for (const ret of prevReturns) {
+          for (const bi of (ret.bill_items as any[]) ?? []) {
+            const prev = returnedQtyMap.get(bi.product_id) || 0;
+            returnedQtyMap.set(bi.product_id, prev + Number(bi.quantity));
+          }
+        }
+
+        const newItemMap = new Map<number, number>(
+          newItems.map((i) => [i.product_id, i.quantity])
+        );
+
+        for (const [prodId, returnedQty] of returnedQtyMap.entries()) {
+          const newQty = newItemMap.get(prodId) || 0;
+          if (newQty < returnedQty - 0.0001) {
+            throw new Error(
+              `Cannot reduce or remove product ID ${prodId}. A return bill of ${returnedQty} units is already recorded against it.`
+            );
+          }
+        }
+      }
+
+      // If this bill itself is a return bill, validate against its original bill
+      if (currentBill.original_bill_id) {
+        const { data: origBill } = await supabase
+          .from('bills')
+          .select('id, bill_items(*, products(name))')
+          .eq('id', currentBill.original_bill_id)
+          .single();
+
+        if (origBill) {
+          const origItemMap = new Map<number, any>(
+            (origBill.bill_items ?? []).map((bi: any) => [bi.product_id, bi])
+          );
+
+          // Get other returns for this original bill (excluding this current bill)
+          const { data: otherReturns } = await supabase
+            .from('bills')
+            .select('id, bill_items(product_id, quantity)')
+            .eq('original_bill_id', currentBill.original_bill_id)
+            .neq('id', id);
+
+          const otherReturnedMap = new Map<number, number>();
+          for (const ret of otherReturns ?? []) {
+            for (const bi of (ret.bill_items as any[]) ?? []) {
+              const prev = otherReturnedMap.get(bi.product_id) || 0;
+              otherReturnedMap.set(bi.product_id, prev + Number(bi.quantity));
+            }
+          }
+
+          for (const item of newItems) {
+            const origItem = origItemMap.get(item.product_id);
+            if (!origItem) {
+              throw new Error(
+                `Product ID ${item.product_id} was not in original bill #${currentBill.original_bill_id}.`
+              );
+            }
+            const otherRet = otherReturnedMap.get(item.product_id) || 0;
+            const availableToReturn = Number(origItem.quantity) - otherRet;
+            if (item.quantity > availableToReturn + 0.0001) {
+              throw new Error(
+                `Cannot return ${item.quantity} units. Maximum returnable is ${availableToReturn}.`
+              );
+            }
+          }
+        }
+      }
+
+      // Gather all product IDs involved (old and new items)
+      const allProductIds = Array.from(
+        new Set([
+          ...(currentBill.bill_items ?? []).map((i: any) => Number(i.product_id)),
+          ...newItems.map((i) => Number(i.product_id)),
+        ])
+      );
+
+      const { data: products, error: prodErr } = await supabase
+        .from('products')
+        .select('id, quantity, name')
+        .in('id', allProductIds);
+
+      if (prodErr) throw prodErr;
+
+      const productMap = new Map<number, { quantity: number; name: string }>(
+        (products ?? []).map((p: any) => [
+          p.id,
+          { quantity: Number(p.quantity), name: p.name },
+        ])
+      );
+
+      // Verify all new products exist
+      for (const item of newItems) {
+        if (!productMap.has(item.product_id)) {
+          throw new Error(`Product ID ${item.product_id} not found.`);
+        }
+      }
+
+      // Compute stock deltas:
+      const oldQtyMap = new Map<number, number>();
+      for (const bi of currentBill.bill_items ?? []) {
+        oldQtyMap.set(Number(bi.product_id), (oldQtyMap.get(Number(bi.product_id)) || 0) + Number(bi.quantity));
+      }
+
+      const newQtyMap = new Map<number, number>();
+      for (const ni of newItems) {
+        newQtyMap.set(Number(ni.product_id), (newQtyMap.get(Number(ni.product_id)) || 0) + Number(ni.quantity));
+      }
+
+      const stockUpdates: { id: number; newQuantity: number }[] = [];
+
+      for (const prodId of allProductIds) {
+        const prod = productMap.get(prodId);
+        if (!prod) continue;
+        const oldQ = oldQtyMap.get(prodId) || 0;
+        const newQ = newQtyMap.get(prodId) || 0;
+
+        let delta = 0;
+        if (isStockIn) {
+          delta = newQ - oldQ;
+        } else {
+          delta = oldQ - newQ;
+        }
+
+        const calculatedQuantity = prod.quantity + delta;
+        if (calculatedQuantity < 0) {
+          throw new Error(
+            `Insufficient stock for "${prod.name}". Adjusting this bill would result in negative stock (${calculatedQuantity}). Current stock: ${prod.quantity}.`
+          );
+        }
+
+        if (delta !== 0) {
+          stockUpdates.push({ id: prodId, newQuantity: calculatedQuantity });
+        }
+      }
+
+      // Calculate totals
+      const itemsWithSubtotal = newItems.map((item) => ({
+        ...item,
+        sub_total: item.quantity * item.price,
+      }));
+
+      const totalAmount = itemsWithSubtotal.reduce((acc, i) => acc + i.sub_total, 0);
+      const netAmount = this.applyDiscounts(totalAmount, discounts);
+
+      // Apply product stock updates
+      for (const update of stockUpdates) {
+        const { error: updErr } = await supabase
+          .from('products')
+          .update({ quantity: update.newQuantity })
+          .eq('id', update.id);
+        if (updErr) throw updErr;
+      }
+
+      // Delete existing bill_items
+      const { error: delErr } = await supabase
+        .from('bill_items')
+        .delete()
+        .eq('bill_id', id);
+
+      if (delErr) throw delErr;
+
+      // Insert new bill_items
+      const billItemsPayload = itemsWithSubtotal.map((item) => ({
+        bill_id: id,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price: item.price,
+        sub_total: item.sub_total,
+      }));
+
+      const { error: insertItemsErr } = await supabase
+        .from('bill_items')
+        .insert(billItemsPayload);
+
+      if (insertItemsErr) throw insertItemsErr;
+
+      // Update bill header
+      const { error: billUpdateErr } = await supabase
+        .from('bills')
+        .update({
+          party_id: partyId,
+          bill_date: billDate,
+          note: note,
+          discounts: discounts,
+          total_amount: totalAmount,
+          net_amount: netAmount,
+        })
+        .eq('id', id);
+
+      if (billUpdateErr) throw billUpdateErr;
+
+    } else {
+      // Items not provided, just update metadata & discounts
+      const totalAmount = Number(currentBill.total_amount);
+      const netAmount = this.applyDiscounts(totalAmount, discounts);
+
+      const { error: billUpdateErr } = await supabase
+        .from('bills')
+        .update({
+          party_id: partyId,
+          bill_date: billDate,
+          note: note,
+          discounts: discounts,
+          net_amount: netAmount,
+        })
+        .eq('id', id);
+
+      if (billUpdateErr) throw billUpdateErr;
+    }
+
+    return this.getBillById(id);
   }
 
   // -------------------------------------------------------------------------
