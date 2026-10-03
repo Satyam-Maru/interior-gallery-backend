@@ -15,21 +15,23 @@ export class CategoryService {
     return category;
   }
 
-  async getAllCategories() {
+  async getAllCategories(companyId: string) {
     const { data, error } = await this.fastify.supabase
       .from('category')
       .select('*')
+      .eq('company_id', companyId)
       .order('name');
 
     if (error) throw error;
     return data;
   }
 
-  async updateCategory(id: number, data: { name: string }) {
+  async updateCategory(id: number, data: { name: string }, companyId: string) {
     const { data: category, error } = await this.fastify.supabase
       .from('category')
       .update(data)
       .eq('id', id)
+      .eq('company_id', companyId)
       .select()
       .single();
 

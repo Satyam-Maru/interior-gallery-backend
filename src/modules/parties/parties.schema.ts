@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const createPartySchema = z.object({
   name: z.string().min(1),
+  company_id: z.enum(['acp', 'handles', 'interior']),
 });
 
 export type CreatePartyInput = z.infer<typeof createPartySchema>;

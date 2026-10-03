@@ -153,6 +153,7 @@ export class BillService {
     const { data: bill, error: billError } = await supabase
       .from('bills')
       .insert({
+        company_id: data.company_id,
         type: data.type,
         party_id: partyId,
         original_bill_id: data.original_bill_id ?? null,
@@ -482,12 +483,13 @@ export class BillService {
   // -------------------------------------------------------------------------
   // List bills with optional filters
   // -------------------------------------------------------------------------
-  async getBills(filters?: GetBillsQuery) {
+  async getBills(filters: GetBillsQuery) {
     let query = this.fastify.supabase
       .from('bills')
       .select(
         `*, parties(*), bill_items(*, products(*))`
       )
+      .eq('company_id', filters.company_id)
       .order('bill_date', { ascending: false });
 
     if (filters?.type) {
@@ -507,10 +509,11 @@ export class BillService {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Fetch all returns to map return counts and totals by original_bill_id
+    // Fetch return totals scoped to this company
     const { data: allReturns } = await this.fastify.supabase
       .from('bills')
       .select('id, original_bill_id, net_amount')
+      .eq('company_id', filters.company_id)
       .not('original_bill_id', 'is', null);
 
     const returnsByOrigId = new Map<number, { total: number; count: number }>();
@@ -553,10 +556,10 @@ export class BillService {
 
     if (billError || !bill) throw new Error(`Bill #${id} not found.`);
 
-    // Query all return bills linked to this bill
+    // Query all return bills linked to this bill (same company guaranteed via FK)
     const { data: returnBills, error: retError } = await supabase
       .from('bills')
-      .select('id, bill_date, type, total_amount, discounts, net_amount, note, bill_items(*, products(*))')
+      .select('id, bill_date, type, total_amount, discounts, net_amount, note, company_bill_no, bill_items(*, products(*))')
       .eq('original_bill_id', id)
       .order('bill_date', { ascending: false });
 
@@ -591,7 +594,6 @@ export class BillService {
       0
     );
 
-    // Effective amount of the bill adjusted for returns (non-destructive reference)
     const adjustedNetAmount = Math.max(0, Number(bill.net_amount) - totalReturned);
     const outstanding = Math.max(0, adjustedNetAmount - totalPaid);
 
@@ -613,15 +615,16 @@ export class BillService {
     const { supabase } = this.fastify;
     const partyId = data.party_id ?? data.entity_id;
 
-    // Fetch bill to validate outstanding
+    // Fetch bill — ensure it belongs to the correct company
     const { data: bill, error: billError } = await supabase
       .from('bills')
-      .select('id, net_amount, party_id')
+      .select('id, net_amount, party_id, company_id')
       .eq('id', data.bill_id)
+      .eq('company_id', data.company_id)
       .single();
 
     if (billError || !bill) {
-      throw new Error(`Bill #${data.bill_id} not found.`);
+      throw new Error(`Bill #${data.bill_id} not found for company '${data.company_id}'.`);
     }
 
     // Sum existing payments
@@ -659,6 +662,7 @@ export class BillService {
     const { data: payment, error: insertError } = await supabase
       .from('payments')
       .insert({
+        company_id: data.company_id,
         bill_id: data.bill_id,
         party_id: partyId ?? bill.party_id,
         amount: data.amount,
@@ -674,15 +678,16 @@ export class BillService {
   }
 
   // -------------------------------------------------------------------------
-  // Get outstanding balance for a specific party
+  // Get outstanding balance for a specific party, scoped to a company
   // -------------------------------------------------------------------------
-  async getOutstandingByParty(partyId: number) {
+  async getOutstandingByParty(partyId: number, companyId: string) {
     const { supabase } = this.fastify;
 
     const { data: bills, error: billsError } = await supabase
       .from('bills')
       .select('id, type, net_amount')
-      .eq('party_id', partyId);
+      .eq('party_id', partyId)
+      .eq('company_id', companyId);
 
     if (billsError) throw billsError;
 
@@ -715,7 +720,7 @@ export class BillService {
     };
   }
 
-  async getOutstandingByEntity(entityId: number) {
-    return this.getOutstandingByParty(entityId);
+  async getOutstandingByEntity(entityId: number, companyId: string) {
+    return this.getOutstandingByParty(entityId, companyId);
   }
 }

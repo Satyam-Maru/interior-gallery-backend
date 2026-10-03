@@ -3,13 +3,14 @@ import { FastifyInstance } from 'fastify';
 export class DashboardService {
   constructor(private fastify: FastifyInstance) {}
 
-  async getStats() {
+  async getStats(companyId: string) {
     const { supabase } = this.fastify;
 
-    // 1. Total Stock (Sum of all product quantities)
+    // 1. Total Stock (scoped to company)
     const { data: products, error: prodError } = await supabase
       .from('products')
-      .select('quantity');
+      .select('quantity')
+      .eq('company_id', companyId);
 
     if (prodError) throw prodError;
     const totalStock = products.reduce(
@@ -17,10 +18,11 @@ export class DashboardService {
       0
     );
 
-    // 2. Bills summary — purchases, sales, returns
+    // 2. Bills summary — scoped to company
     const { data: bills, error: billsError } = await supabase
       .from('bills')
-      .select('id, type, net_amount, bill_date');
+      .select('id, type, net_amount, bill_date')
+      .eq('company_id', companyId);
 
     if (billsError) throw billsError;
 
@@ -60,7 +62,7 @@ export class DashboardService {
     const totalBilled = netPurchases + netSales;
     const totalOutstanding = Math.max(0, totalBilled - totalPaid);
 
-    // 4. Sales & Purchase Trend (Last 7 Days)
+    // 4. Sales & Purchase Trend (Last 7 Days, scoped to company)
     const last7Days = [...Array(7)]
       .map((_, i) => {
         const d = new Date();
@@ -72,6 +74,7 @@ export class DashboardService {
     const { data: trendData, error: trendError } = await supabase
       .from('bills')
       .select('type, net_amount, bill_date')
+      .eq('company_id', companyId)
       .gte(
         'bill_date',
         new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -106,10 +109,11 @@ export class DashboardService {
       };
     });
 
-    // 5. Category Distribution (by product quantity)
+    // 5. Category Distribution (scoped to company)
     const { data: catData, error: catError } = await supabase
       .from('products')
-      .select('quantity, category(name)');
+      .select('quantity, category(name)')
+      .eq('company_id', companyId);
 
     if (catError) throw catError;
 

@@ -96,13 +96,17 @@ export const createPaymentHandler = async (
 // Get outstanding balance for a specific party
 // ---------------------------------------------------------------------------
 export const getOutstandingHandler = async (
-  request: FastifyRequest<{ Params: { partyId?: string; entityId?: string } }>,
+  request: FastifyRequest<{ Params: { partyId?: string; entityId?: string }; Querystring: { company_id: string } }>,
   reply: FastifyReply
 ) => {
   const service = new BillService(request.server);
   try {
     const id = Number(request.params.partyId ?? request.params.entityId);
-    const result = await service.getOutstandingByParty(id);
+    const companyId = request.query.company_id;
+    if (!companyId) {
+      return reply.code(400).send({ error: 'company_id query parameter is required' });
+    }
+    const result = await service.getOutstandingByParty(id, companyId);
     return reply.send(result);
   } catch (error: any) {
     request.log.error(error);

@@ -7,6 +7,7 @@ export const createProductSchema = z.object({
   quantity: z.number().min(0).default(0),
   category_id: z.number().int(),
   code: z.string().optional(),
+  company_id: z.enum(['acp', 'handles', 'interior']),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

@@ -16,12 +16,14 @@ export const createPartyHandler = async (
 };
 
 export const getPartiesHandler = async (
-  request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: { company_id: string } }>,
   reply: FastifyReply
 ) => {
   const service = new PartyService(request.server);
   try {
-    const parties = await service.getAllParties();
+    const companyId = request.query.company_id;
+    if (!companyId) return reply.code(400).send({ error: 'company_id is required' });
+    const parties = await service.getAllParties(companyId);
     return reply.send(parties);
   } catch (error: any) {
     return reply.code(500).send({ error: error.message });
@@ -29,12 +31,14 @@ export const getPartiesHandler = async (
 };
 
 export const updatePartyHandler = async (
-  request: FastifyRequest<{ Params: { id: string }; Body: UpdatePartyInput }>,
+  request: FastifyRequest<{ Params: { id: string }; Body: UpdatePartyInput; Querystring: { company_id: string } }>,
   reply: FastifyReply
 ) => {
   const service = new PartyService(request.server);
   try {
-    const party = await service.updateParty(parseInt(request.params.id), request.body);
+    const companyId = request.query.company_id;
+    if (!companyId) return reply.code(400).send({ error: 'company_id is required' });
+    const party = await service.updateParty(parseInt(request.params.id), request.body, companyId);
     return reply.send(party);
   } catch (error: any) {
     return reply.code(400).send({ error: error.message });
@@ -42,12 +46,14 @@ export const updatePartyHandler = async (
 };
 
 export const deletePartyHandler = async (
-  request: FastifyRequest<{ Params: { id: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Querystring: { company_id: string } }>,
   reply: FastifyReply
 ) => {
   const service = new PartyService(request.server);
   try {
-    await service.deleteParty(parseInt(request.params.id));
+    const companyId = request.query.company_id;
+    if (!companyId) return reply.code(400).send({ error: 'company_id is required' });
+    await service.deleteParty(parseInt(request.params.id), companyId);
     return reply.code(204).send();
   } catch (error: any) {
     return reply.code(400).send({ error: error.message });

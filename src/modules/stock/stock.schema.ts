@@ -15,6 +15,9 @@ export type BillItemInput = z.infer<typeof billItemSchema>;
 // Create Bill
 // ---------------------------------------------------------------------------
 export const createBillSchema = z.object({
+  /** The company this bill belongs to */
+  company_id: z.enum(['acp', 'handles', 'interior']),
+
   /** purchase | sell | purchase_return | sell_return */
   type: z.enum(['purchase', 'sell', 'purchase_return', 'sell_return']),
 
@@ -63,6 +66,7 @@ export type UpdateBillInput = z.infer<typeof updateBillSchema>;
 // Create Payment (record a payment against an existing bill)
 // ---------------------------------------------------------------------------
 export const createPaymentSchema = z.object({
+  company_id: z.enum(['acp', 'handles', 'interior']),
   bill_id: z.number().int().positive(),
   party_id: z.number().int().positive().optional(),
   entity_id: z.number().int().positive().optional(),
@@ -78,6 +82,7 @@ export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 // Query filters for listing bills
 // ---------------------------------------------------------------------------
 export const getBillsQuerySchema = z.object({
+  company_id: z.enum(['acp', 'handles', 'interior']),
   type: z.enum(['purchase', 'sell', 'purchase_return', 'sell_return']).optional(),
   party_id: z.string().optional(),
   entity_id: z.string().optional(),
